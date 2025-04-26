@@ -2,18 +2,17 @@ import numpy as np
 
 def unbroadcast(grad, target_shape):
     # First, check if the gradient and target shape are broadcastable
-    try:
-        np.broadcast(grad, np.empty(target_shape))  # Check if the grad and target_shape can be broadcasted
-    except ValueError:
-        raise ValueError(f"Cannot broadcast grad of shape {grad.shape} to target shape {target_shape}")
+    if grad.shape == target_shape:
+        return grad
 
-    # Now reduce extra dimensions
+    # Reduce extra dimensions (when grad has more dimensions than the target shape)
     while len(grad.shape) > len(target_shape):
-        grad = np.sum(grad, axis=0, keepdims=True)
+        grad = np.sum(grad, axis=0)
+        
 
-    # Then sum along axes where target_shape has 1 (broadcasted dims)
+    # Then, sum along axes where target_shape has 1 (broadcasted dims)
     for i, dim in enumerate(target_shape):
-        if dim == 1:
+        if dim == 1 and grad.shape[i] != 1:  # We only sum over dimensions that are 1 in the target shape
             grad = np.sum(grad, axis=i, keepdims=True)
 
     return grad

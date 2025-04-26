@@ -19,8 +19,16 @@ class Tensor:
     # Method to perform addition operation
     def __add__(self, other):
         other = other if isinstance(other, Tensor) else Tensor(other)
-        result = Tensor(self.data + other.data, requires_grad=self.requires_grad or other.requires_grad)
 
+        # Check for empty tensor
+        if self.data.size == 0 or other.data.size == 0:
+            print("Warning: Adding an empty tensor.")
+            result = Tensor(self.data if self.data.size != 0 else other.data, requires_grad=self.requires_grad or other.requires_grad)
+            return result
+        
+        # Result of addition
+        result = Tensor(self.data + other.data, requires_grad=self.requires_grad or other.requires_grad)
+        
         # Define the backward function for addition
         if result.requires_grad:
             def _backward():
@@ -47,27 +55,145 @@ class Tensor:
         # Return the result
         return result
     
-    def backward(self):
-        # Only proceed if tensor requires gradients
-        if not self.requires_grad:
-            return
+    # Method to perform multiplication operation
+    def __mul__(self, other):
+        other = other if isinstance(other, Tensor) else Tensor(other)
+        
+        # Check for empty tensor
+        if self.data.size == 0 or other.data.size == 0:
+            print("Warning: Multiplying with an empty tensor.")
+            result = Tensor(self.data if self.data.size != 0 else other.data, requires_grad=self.requires_grad or other.requires_grad)
+            return result
+        
+        # Result of multiplication
+        result = Tensor(self.data * other.data, requires_grad=self.requires_grad or other.requires_grad)
 
-        # If no gradient is passed, initialize it to ones (typically for loss)
-        if self.grad is None:
-            self.grad = np.ones_like(self.data)
+        if result.requires_grad:
+            def _backward():
+                grad = result.grad
 
-        # Call the operation-specific backward function
-        self._backward()
+                # Backpropagation for self
+                if self.requires_grad:
+                    if grad.shape != self.shape:
+                        self.grad += unbroadcast(grad * other.data, self.shape)
+                    else:
+                        self.grad += grad * other.data
 
-        # Propagate the gradients to previous tensors
-        for prev in self._prev:
-            if prev.requires_grad:
-                prev.backward()
+                # Backpropagation for other
+                if other.requires_grad:
+                    if grad.shape != other.shape:
+                        other.grad += unbroadcast(grad * self.data, other.shape)
+                    else:
+                        other.grad += grad * self.data
+                
+            result._backward = _backward
+            result._prev = [self, other]
+            result._op = "*"
+
+        # Return the result
+        return result
+    
+    # Method to perform matrix multiplication operation
+    def __matmul__(self, other):
+        other = other if isinstance(other, Tensor) else Tensor(other)
+
+        # Check for empty tensor
+        if self.data.size == 0 or other.data.size == 0:
+            print("Warning: Matrix multiplying with an empty tensor.")
+            result = Tensor(self.data if self.data.size != 0 else other.data, requires_grad=self.requires_grad or other.requires_grad)
+            return result
+        
+        # Matrix multiplication result
+        result = Tensor(np.matmul(self.data, other.data), requires_grad=self.requires_grad or other.requires_grad)
+
+        if result.requires_grad:
+            def _backward():
+                grad = result.grad
+
+                # Backpropagation for self
+                if self.requires_grad:
+                    if grad.shape != self.shape:
+                        self.grad += unbroadcast(np.matmul(grad, other.data.T), self.shape)
+                    else:
+                        self.grad += np.matmul(grad, other.data.T)
+                
+                # Backpropagation for other
+                if other.requires_grad:
+                    if grad.shape != other.shape:
+                        other.grad += unbroadcast(np.matmul(self.data.T, grad), other.shape)
+                    else:
+                        other.grad += np.matmul(self.data.T, grad)
+                
+            result._backward = _backward
+            result._prev = [self, other]
+            result._op = "@"
+        
+        # Return the result
+        return result
+    
+    # Additional methods for tensor operations
+    def matmul(self, other):
+        return self.__matmul__(other)
+
+    # Backward propagation method to compute gradients
+    def backward(self, grad=None):
+        self.grad = np.ones_like(self.data)
+
+        # Visited set to keep track of visited tensors
+        visited = set()
+        topo = []
+
+        # Build the topological order of tensors for backward pass
+        def build_topo(t):
+            if t not in visited:
+                visited.add(t)
+                for child in t._prev:
+                    build_topo(child)
+                topo.append(t)
+        # Call the build_topo function for the current tensor
+        build_topo(self)
+
+        # Perform the backward pass in reverse topological order
+        for t in reversed(topo):
+            t._backward()
+
+    # ReLU activation function
+    def relu(self):
+        # Apply ReLU element-wise (max(0, x))
+        result = Tensor(np.maximum(0, self.data), requires_grad=self.requires_grad)
+        
+        if result.requires_grad:
+            def _backward():
+                # ReLU derivative: 1 where self.data > 0, else 0
+                if self.grad is not None:
+                    self.grad += result.grad * (self.data > 0)  # Accumulate gradients correctly
+                else:
+                    self.grad = result.grad * (self.data > 0)  # Initialize gradient for first backward pass
+                
+                # Debugging statements
+                print("Tensor (self):", self)
+                print("self.grad (after backward pass):", self.grad)
+                print("result.grad:", result.grad)  # The gradient of the output tensor
+
+            result._backward = _backward
+            result._prev = [self]
+            result._op = "ReLU"
+        
+        return result
+
     
     # Reset the gradient to zero
     def zero_grad(self):
         if self.requires_grad:
             self.grad = np.zeros_like(self.data)
+    
+    # Transpose the tensor
+    def transpose(self):
+        return Tensor(np.transpose(self.data), requires_grad=self.requires_grad)
+
+    # Reshape the tensor
+    def reshape(self, new_shape):
+        return Tensor(self.data.reshape(new_shape), requires_grad=self.requires_grad)
 
     # Represent the tensor as a string for easy debugging
     def __repr__(self):
