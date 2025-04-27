@@ -1,50 +1,68 @@
 import numpy as np
-from remini.layers.dense import Dense
-from remini.optim.sgd import SGD
-from remini.tensor import Tensor
-from remini.losses.mse_loss import MSELoss
 
-# Input-output data
-x_train = Tensor([[1.0], [2.0], [3.0], [4.0], [5.0]])
-y_train = Tensor([[3.0], [5.0], [7.0], [9.0], [11.0]])
+from remini.tensor.tensor import Tensor
 
-# Define layers manually
-layers = [
-    Dense(1, 16),   # First layer (1 input -> 4 neurons)
-    Dense(16, 1)    # Second layer (4 -> 1 output)
-]
+# Test Tensor class
+# Define two tensors
+t1 = Tensor([[1, 2], [3, 4], [5, 6]], requires_grad=True)
+t2 = Tensor([[5, 6], [7, 8], [8, 9]], requires_grad=True)
 
-# Collect parameters from all layers
-params = []
-for layer in layers:
-    params.extend(layer.parameters())
+# Test addition
+t_add = t1 + t2
+expected_add = t1.data + t2.data
+print(f"Addition Result: \n{t_add}")
+print(f"Expected Addition Result: \n{expected_add}")
+t_add.backward()  # Compute gradients
+print(f"Expected Gradients: \n{t_add.grad}")
 
-# Optimizer and loss
-optimizer = SGD(params=params, lr=0.01)
-loss_fn = MSELoss()
+# Test multiplication
+t_mul = t1 * t2
+expected_mul = t1.data * t2.data
+print(f"Multiplication Result: \n{t_mul}")
+print(f"Expected Multiplication Result: \n{expected_mul}")
+t_mul.backward()  # Compute gradients
+print(f"Expected Gradients: \n{t_mul.grad}")
 
-# Training loop
-for epoch in range(2000):
-    out = x_train
-    for layer in layers:
-        out = layer(out)  # Forward pass through each layer
+# Test matrix multiplication
+t_matmul = t1 @ t2
+expected_matmul = np.matmul(t1.data, t2.data)
+print(f"Matrix Multiplication Result: \n{t_matmul}")
+print(f"Expected Matrix Multiplication Result: \n{expected_matmul}")
+t_matmul.backward()  # Compute gradients
+print(f"Expected Gradients: \n{t_matmul.grad}")
 
-    y_pred = out
-    loss = loss_fn(y_pred, y_train)
+# Test scalar addition
+scalar = 2
+t_scalar_add = t1 + scalar
+expected_scalar_add = t1.data + scalar
+print(f"Scalar Addition Result: \n{t_scalar_add}")
+print(f"Expected Scalar Addition Result: \n{expected_scalar_add}")
+t_scalar_add.backward()  # Compute gradients
+print(f"Expected Gradients: \n{t_scalar_add.grad}")
 
-    optimizer.zero_grad()
-    loss.grad = np.ones_like(loss.data)
-    y_pred.grad = loss.grad
-    optimizer.step()
+# Test ReLU activation
+t_relu = t1.relu()
+expected_relu = np.maximum(0, t1.data)
+print(f"ReLU Activation Result: \n{t_relu}")
+print(f"Expected ReLU Activation Result: \n{expected_relu}")
+t_relu.backward()  # Compute gradients
+print(f"Expected Gradients for ReLU: \n{t_relu.grad}")
 
-    if epoch % 100 == 0:
-        print(f"Epoch {epoch}, Loss: {loss.data}")
-        
-# Final output
-print("\nTrained Model Output:")
-predictions = y_pred.data
-targets = y_train.data
+# Check the gradient after ReLU
+print(f"t1 Gradient after ReLU backward: \n{t1.grad}")
 
-print("Input\tPredicted\tTarget")
-for x, pred, target in zip(x_train.data, predictions, targets):
-    print(f"{x[0]:.1f}\t{pred[0]:.4f}\t\t{target[0]:.1f}")
+# Test reshaping
+t_reshaped = t1.reshape((-1,))
+expected_reshaped = t1.data.reshape((-1,))
+print(f"Reshaped Tensor: \n{t_reshaped}")
+print(f"Expected Reshaped Tensor: \n{expected_reshaped}")
+
+# Test transpose
+t_transposed = t1.transpose()
+expected_transposed = t1.data.T
+print(f"Transposed Tensor: \n{t_transposed}")
+print(f"Expected Transposed Tensor: \n{expected_transposed}")
+
+# Reset gradients
+t1.zero_grad()
+print(f"t1 Gradient after zero_grad: \n{t1.grad}")

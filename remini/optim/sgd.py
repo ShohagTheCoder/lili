@@ -6,11 +6,13 @@ class SGD:
         self.params = params
 
     def step(self):
-        for i, param in enumerate(self.params):
-            if param.grad is not None:
+        # Update parameters using the gradients
+        for param in self.params:
+            if param.grad is not None:  # Check if gradient exists
                 param.data -= self.lr * param.grad
 
     def zero_grad(self):
-        for i, param in enumerate(self.params):
+        # Zero out the gradients
+        for param in self.params:
             if param.grad is not None:
-                param.grad = np.zeros_like(param.grad)
+                param.grad.fill(0)  # Reset the gradient to zero, ensuring the same shape
