@@ -1,49 +1,69 @@
 import numpy as np
 from remini.layers.dense import Dense
-from remini.optim.sgd import SGD
+from remini.models.sequential import Sequential
+from remini.optim.adam import Adam
 from remini.tensor import Tensor
 from remini.losses.mse_loss import MSELoss
 
-# Input-output data
-x_train = Tensor([[1.0], [2.0], [3.0], [4.0], [5.0]])
-y_train = Tensor([[3.0], [5.0], [7.0], [9.0], [11.0]])
+# Input-output data for y = 2x^3 - 5x^2 + 3x + 8
+x_train = np.array([[1.0], [2.0], [3.0], [4.0], [5.0]])
+y_train = np.array([[2.0], [8.0], [38.0], [118.0], [258.0]])
 
-# Define layers manually
-layer1 = Dense(1, 2)   # First layer (1 input -> 4 neurons)
-layer2 = Dense(2, 1)    # Second layer (4 -> 1 output)
+# Standardize x_train
+x_mean = np.mean(x_train)
+x_std = np.std(x_train)
+x_train_standardized = (x_train - x_mean) / x_std
 
-# Optimizer and loss
-optimizer = SGD(params=[layer1.weights, layer1.bias, layer2.weights, layer2.bias], lr=0.01)
+# Convert numpy arrays to Tensor
+x_train_tensor = Tensor(x_train_standardized)
+y_train_tensor = Tensor(y_train)
+
+# Define the model using Sequential API
+model = Sequential(
+    Dense(1, 64),  # First Dense layer
+    Dense(64, 64),  # Second Dense layer
+    Dense(64, 1)    # Output layer
+)
+
+# Optimizer and loss function
+optimizer = Adam(params=model.parameters(), lr=0.0001)
 loss_fn = MSELoss()
 
 # Training loop
-for epoch in range(100):
-    optimizer.zero_grad()   # <-- 1. Zero gradients first
+epochs = 50000
+for epoch in range(epochs):
+    # Zero gradients from previous step
+    optimizer.zero_grad()
 
-    out1 = layer1.forward(x_train)
-    y_pred = layer2.forward(out1)
-    loss = loss_fn(y_pred, y_train)
-    
-    # Grad output
-    # dL/dy_pred = 2 * (y_pred - y_true) / N
-    grad_output = (2 * (y_pred.data - y_train.data)) / y_train.data.shape[0]
+    # Forward pass: Get model predictions
+    y_pred = model.forward(x_train_tensor)
 
+    # Calculate loss
+    loss = loss_fn(y_pred, y_train_tensor)
 
-    # === Manual backward pass ===
-    grad_output = (2 * (y_pred.data - y_train.data)) / y_train.data.shape[0]  # dL/dy_pred
-    grad_out2 = layer2.backward(Tensor(grad_output))  # dL/dlayer2 input
-    _ = layer1.backward(grad_out2)       # <-- 2. Backward from loss (automatically propagate)
-    
-    optimizer.step()        # <-- 3. Update parameters
+    # Compute gradients via backward pass
+    grad_output = (2 * (y_pred.data - y_train_tensor.data)) / y_train_tensor.data.shape[0]
+    grad = Tensor(grad_output)
 
-    if epoch % 100 == 0:
+    # Backward pass through each layer (reversed)
+    for layer in reversed(model.layers):
+        grad = layer.backward(grad)
+
+    # Optimizer step: Update parameters
+    optimizer.step()
+
+    # Print loss every 200 epochs
+    if epoch % 200 == 0:
         print(f"Epoch {epoch}, Loss: {loss.data}")
 
-# Final output
+# Denormalize x_train for final output
+x_original = (x_train_tensor.data * x_std + x_mean)
+
+# Display predictions
 print("\nTrained Model Output:")
 predictions = y_pred.data
-targets = y_train.data
+targets = y_train_tensor.data
 
 print("Input\tPredicted\tTarget")
-for x, pred, target in zip(x_train.data, predictions, targets):
+for x, pred, target in zip(x_original, predictions, targets):
     print(f"{x[0]:.1f}\t{pred[0]:.4f}\t\t{target[0]:.1f}")

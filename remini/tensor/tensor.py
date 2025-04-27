@@ -202,11 +202,76 @@ class Tensor:
             result._op = "ReLU"
         
         return result
+    
+    # Leaky ReLU activation function
+    def leaky_relu(self, negative_slope=0.01):
+        # Apply Leaky ReLU element-wise
+        result = Tensor(np.where(self.data > 0, self.data, negative_slope * self.data), requires_grad=self.requires_grad)
+        
+        if result.requires_grad:
+            def _backward():
+                if self.grad is not None:
+                    # Leaky ReLU derivative: 1 where x > 0 else negative_slope
+                    self.grad += result.grad * np.where(self.data > 0, 1.0, negative_slope)
+                else:
+                    self.grad = result.grad * np.where(self.data > 0, 1.0, negative_slope)
+                
+                # Debugging statements
+                print("Tensor (self):", self)
+                print("self.grad (after backward pass):", self.grad)
+                print("result.grad:", result.grad)  # The gradient of the output tensor
+
+            result._backward = _backward
+            result._prev = [self]
+            result._op = "LeakyReLU"
+        
+        return result
 
     # Reset the gradient to zero
     def zero_grad(self):
         if self.requires_grad:
             self.grad = np.zeros_like(self.data)
+            
+    @property
+    def T(self):
+        result = Tensor(self.data.T, requires_grad=self.requires_grad)
+
+        if result.requires_grad:
+            def _backward():
+                if self.grad is not None:
+                    self.grad += result.grad.T
+                else:
+                    self.grad = result.grad.T
+
+            result._backward = _backward
+            result._prev = [self]
+            result._op = "Transpose"
+        
+        return result
+    
+    def sum(self, axis=None, keepdims=False):
+        """Sum of tensor elements over a given axis."""
+        result = Tensor(np.sum(self.data, axis=axis, keepdims=keepdims), requires_grad=self.requires_grad)
+
+        if self.requires_grad:
+            def _backward():
+                grad = result.grad
+                if axis is None:
+                    grad = np.full_like(self.data, grad)
+                else:
+                    grad = np.expand_dims(grad, axis) if not keepdims else grad
+                    grad = np.broadcast_to(grad, self.data.shape)
+
+                if self.grad is not None:
+                    self.grad += grad
+                else:
+                    self.grad = grad
+
+            result._backward = _backward
+            result._prev = [self]
+            result._op = "Sum"
+
+        return result
     
     # Transpose the tensor
     def transpose(self):
