@@ -16,7 +16,7 @@ class Tensor:
         self._prev = []
         self._op = '' # Operation type (e.g., 'add', 'mul', etc.)
 
-    # Method to perform addition operation
+    # Method to perform addition operation\
     def __add__(self, other):
         other = other if isinstance(other, Tensor) else Tensor(other)
 
@@ -103,6 +103,11 @@ class Tensor:
             result = Tensor(self.data if self.data.size != 0 else other.data, requires_grad=self.requires_grad or other.requires_grad)
             return result
         
+        # Check shape compatibility for matrix multiplication
+        if self.shape[-1] != other.shape[0]:
+            print(f"Shapes {self.shape} and {other.shape} are not aligned for matrix multiplication.")
+            return Tensor(np.empty((self.shape[0], other.shape[1])), requires_grad=self.requires_grad or other.requires_grad)
+        
         # Matrix multiplication result
         result = Tensor(np.matmul(self.data, other.data), requires_grad=self.requires_grad or other.requires_grad)
 
@@ -131,9 +136,22 @@ class Tensor:
         # Return the result
         return result
     
+    # Method to perform subtraction operation
+    def __sub__(self, other):
+        if isinstance(other, Tensor):
+            return self.__add__(other.__neg__())
+        
+    def __rsub__(self, other):
+        if isinstance(other, Tensor):
+            return other.__add__(self.__neg__())
+    
     # Additional methods for tensor operations
+    def add(self, other):
+        return self.__add__(other)
     def matmul(self, other):
         return self.__matmul__(other)
+    def neg(self):
+        return self.__neg__()
 
     # Backward propagation method to compute gradients
     def backward(self, grad=None):
@@ -156,6 +174,10 @@ class Tensor:
         # Perform the backward pass in reverse topological order
         for t in reversed(topo):
             t._backward()
+            
+    # Neg method for negation
+    def __neg__(self):
+        return Tensor(-self.data, requires_grad=self.requires_grad)
 
     # ReLU activation function
     def relu(self):
@@ -181,7 +203,6 @@ class Tensor:
         
         return result
 
-    
     # Reset the gradient to zero
     def zero_grad(self):
         if self.requires_grad:

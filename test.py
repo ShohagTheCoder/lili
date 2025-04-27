@@ -1,58 +1,50 @@
 import numpy as np
-from remini.tensor import Tensor  # Assuming the Tensor class is in a file named tensor.py
+from remini.layers.dense import Dense
+from remini.optim.sgd import SGD
+from remini.tensor import Tensor
+from remini.losses.mse_loss import MSELoss
 
-# Test 1: Basic Matrix Multiplication (2x2 matrices)
-def test_basic_matmul():
-    a = Tensor(np.array([[1, 2], [3, 4]]), requires_grad=True)
-    b = Tensor(np.array([[5, 6], [7, 8]]), requires_grad=True)
+# Input-output data
+x_train = Tensor([[1.0], [2.0], [3.0], [4.0], [5.0]])
+y_train = Tensor([[3.0], [5.0], [7.0], [9.0], [11.0]])
 
-    c = a.matmul(b)
-    print("Result of matrix multiplication (2x2 matrices):")
-    print(c.data)  # Expected: [[19, 22], [43, 50]]
-    print("Expected: [[19, 22], [43, 50]]")
+# Define layers manually
+layers = [
+    Dense(1, 16),   # First layer (1 input -> 4 neurons)
+    Dense(16, 1)    # Second layer (4 -> 1 output)
+]
 
-    c.backward()
-    print("Gradient of a:", a.grad)  # Expected: [[12, 14], [16, 18]]
-    print("Expected: [[12, 14], [16, 18]]")
-    print("Gradient of b:", b.grad)  # Expected: [[4, 6], [4, 6]]
-    print("Expected: [[4, 6], [4, 6]]")
+# Collect parameters from all layers
+params = []
+for layer in layers:
+    params.extend(layer.parameters())
 
-# Test 2: Multiplying a Row Vector with a Column Vector (1xN) * (Nx1)
-def test_row_col_matmul():
-    a = Tensor(np.array([[1, 2, 3]]), requires_grad=True)  # 1x3 row vector
-    b = Tensor(np.array([[4], [5], [6]]), requires_grad=True)  # 3x1 column vector
+# Optimizer and loss
+optimizer = SGD(params=params, lr=0.01)
+loss_fn = MSELoss()
 
-    c = a.matmul(b)
-    print("Result of row vector x column vector multiplication:")
-    print(c.data)  # Expected: [[32]] (1x1 scalar result)
-    print("Expected: [[32]]")
+# Training loop
+for epoch in range(2000):
+    out = x_train
+    for layer in layers:
+        out = layer(out)  # Forward pass through each layer
 
-    c.backward()
-    print("Gradient of a:", a.grad)  # Expected: [[4, 5, 6]]
-    print("Expected: [[4, 5, 6]]")
-    print("Gradient of b:", b.grad)  # Expected: [[1], [2], [3]]
-    print("Expected: [[1], [2], [3]]")
+    y_pred = out
+    loss = loss_fn(y_pred, y_train)
 
-# Test 3: Multiplying a Scalar with a Matrix (1x1 matrix multiplication)
-def test_scalar_matmul():
-    a = Tensor(np.array([[2]]), requires_grad=True)  # Scalar
-    b = Tensor(np.array([[5, 6], [7, 8]]), requires_grad=True)  # 2x2 matrix
+    optimizer.zero_grad()
+    loss.grad = np.ones_like(loss.data)
+    y_pred.grad = loss.grad
+    optimizer.step()
 
-    c = a.matmul(b)
-    print("Result of scalar x matrix multiplication:")
-    print(c.data)  # Expected: [[10, 12], [14, 16]]
-    print("Expected: [[10, 12], [14, 16]]")
+    if epoch % 100 == 0:
+        print(f"Epoch {epoch}, Loss: {loss.data}")
+        
+# Final output
+print("\nTrained Model Output:")
+predictions = y_pred.data
+targets = y_train.data
 
-    c.backward()
-    print("Gradient of a:", a.grad)  # Expected: [[22]]
-    print("Expected: [[22]]")
-    print("Gradient of b:", b.grad)  # Expected: [[2], [2]]
-    print("Expected: [[2], [2]]")
-
-# Run the tests
-if __name__ == "__main__":
-    test_basic_matmul()
-    print("\n--------------------------------\n")
-    test_row_col_matmul()
-    print("\n--------------------------------\n")
-    test_scalar_matmul()
+print("Input\tPredicted\tTarget")
+for x, pred, target in zip(x_train.data, predictions, targets):
+    print(f"{x[0]:.1f}\t{pred[0]:.4f}\t\t{target[0]:.1f}")
